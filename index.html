@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Загадочный бортовой журнал</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:ital,wght@0,400;0,700;1,400&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
+    
+    <style>
+        /* Пользовательские стили и анимации */
+        body {
+            /* Темный деревянный фон стола */
+            background-color: #2c1e16;
+            background-image: url('data:image/svg+xml;utf8,<svg width="100" height="100" xmlns="http://www.w3.org/2000/svg"><filter id="noise"><feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="4" stitchTiles="stitch"/></filter><rect width="100" height="100" filter="url(%23noise)" opacity="0.08"/></svg>');
+            font-family: 'Courier Prime', monospace;
+            color: #3b2818;
+            margin: 0;
+            overflow-x: hidden;
+        }
+
+        /* Текстура старой бумаги */
+        .parchment {
+            background-color: #f4e8d1;
+            background-image: 
+                radial-gradient(circle at center, transparent 0%, #e6d0a7 100%),
+                url('data:image/svg+xml;utf8,<svg width="200" height="200" xmlns="http://www.w3.org/2000/svg"><filter id="noise"><feTurbulence type="fractalNoise" baseFrequency="0.05" numOctaves="3" stitchTiles="stitch"/></filter><rect width="200" height="200" filter="url(%23noise)" opacity="0.4"/></svg>');
+            box-shadow: 0 20px 40px rgba(0,0,0,0.6), inset 0 0 40px rgba(139, 69, 19, 0.2);
+            border-radius: 4px;
+            position: relative;
+        }
+
+        .parchment::before {
+            content: "";
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            border: 2px solid rgba(139, 69, 19, 0.3);
+            margin: 8px;
+            pointer-events: none;
+        }
+
+        h1, h2, .fancy-font {
+            font-family: 'Playfair Display', serif;
+        }
+
+        /* Анимация сканирования/дешифровки */
+        .decoding-text {
+            border-right: 3px solid #8b4513;
+            animation: blink-caret 0.75s step-end infinite;
+        }
+
+        @keyframes blink-caret {
+            from, to { border-color: transparent }
+            50% { border-color: #8b4513; }
+        }
+
+        /* Анимация правильного ответа */
+        .correct-anim {
+            animation: pulse-green 0.6s ease-out;
+            background-color: #a7f3d0 !important; /* light green */
+            color: #064e3b !important;
+            border-color: #059669 !important;
+        }
+
+        @keyframes pulse-green {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); box-shadow: 0 0 20px rgba(16, 185, 129, 0.6); }
+            100% { transform: scale(1); }
+        }
+
+        /* Анимация ошибки */
+        .wrong-anim {
+            animation: shake-red 0.5s cubic-bezier(.36,.07,.19,.97) both;
+            background-color: #fecaca !important; /* light red */
+            color: #7f1d1d !important;
+            border-color: #dc2626 !important;
+        }
+
+        @keyframes shake-red {
+            10%, 90% { transform: translate3d(-1px, 0, 0); }
+            20%, 80% { transform: translate3d(2px, 0, 0); }
+            30%, 50%, 70% { transform: translate3d(-4px, 0, 0); }
+            40%, 60% { transform: translate3d(4px, 0, 0); }
+        }
+
+        /* Стили кнопок */
+        .option-btn {
+            background: rgba(255, 255, 255, 0.4);
+            border: 2px solid #8b4513;
+            transition: all 0.2s;
+        }
+        .option-btn:hover:not(:disabled) {
+            background: #8b4513;
+            color: #f4e8d1;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+        }
+        .option-btn:disabled {
+            opacity: 0.8;
+            cursor: not-allowed;
+        }
+
+        /* Клякса (декор) */
+        .ink-stain {
+            position: absolute;
+            background: #2a1610;
+            border-radius: 50% 40% 60% 30% / 30% 50% 40% 60%;
+            opacity: 0.15;
+            filter: blur(2px);
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-4">
+
+    <!-- Главный контейнер (Журнал) -->
+    <div class="parchment w-full max-w-3xl min-h-[600px] p-8 md:p-12 flex flex-col relative overflow-hidden">
+        
+        /* Декоративные кляксы */
+        <div class="ink-stain w-32 h-24 top-[-20px] left-[-10px] transform rotate-12"></div>
+        <div class="ink-stain w-16 h-16 bottom-10 right-10 transform -rotate-45 opacity-20"></div>
+
+        <!-- ЭКРАН 1: Старт -->
+        <div id="start-screen" class="flex flex-col items-center justify-center flex-grow text-center z-10">
+            <h1 class="text-4xl md:text-5xl font-bold mb-6 text-amber-900 border-b-2 border-amber-800 pb-4">Бортовой Журнал</h1>
+            <p class="text-lg md:text-xl mb-8 max-w-xl leading-relaxed">
+                Система восстановления данных активирована.<br>
+                Последние записи экспедиции повреждены стихией. Ваша задача — расшифровать косвенные улики и определить, где находился корабль.
+            </p>
+            <button onclick="startGame()" class="px-8 py-3 text-xl font-bold rounded-sm option-btn">
+                Начать расшифровку
+            </button>
+        </div>
+
+        <!-- ЭКРАН 2: Игровой процесс -->
+        <div id="game-screen" class="hidden flex-col h-full flex-grow z-10">
+            <!-- Верхняя панель: Статус и Прогресс -->
+            <div class="flex justify-between items-center mb-6 border-b-2 border-amber-800 border-opacity-30 pb-2">
+                <div class="text-sm font-bold text-amber-800 uppercase tracking-widest flex items-center">
+                    <span class="w-3 h-3 rounded-full bg-red-600 animate-pulse mr-2" id="status-indicator"></span>
+                    <span id="system-status">Система: Восстановление...</span>
+                </div>
+                <div class="font-bold text-lg text-amber-900">
+                    Запись: <span id="current-progress">1</span>/5
+                </div>
+            </div>
+
+            <!-- Область текста загадки -->
+            <div class="flex-grow flex flex-col justify-center mb-8 min-h-[150px]">
+                <p id="log-text" class="text-xl md:text-2xl leading-relaxed decoding-text whitespace-pre-wrap"></p>
+            </div>
+
+            <!-- Область кнопок (ответов) -->
+            <div id="options-container" class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-auto opacity-0 transition-opacity duration-500">
+                <!-- Кнопки будут добавлены через JS -->
+            </div>
+            
+            <!-- Сообщение о результате ответа -->
+            <div id="feedback-msg" class="h-8 mt-4 text-center font-bold text-lg transition-opacity opacity-0"></div>
+        </div>
+
+        <!-- ЭКРАН 3: Победа -->
+        <div id="end-screen" class="hidden flex-col items-center justify-center flex-grow text-center z-10">
+            <h2 class="text-4xl font-bold mb-4 text-amber-900">ДАННЫЕ ВОССТАНОВЛЕНЫ</h2>
+            <div class="w-24 h-1 bg-amber-800 mb-6"></div>
+            <p class="text-xl mb-4">Вы успешно расшифровали все записи капитана!</p>
+            <p class="text-lg mb-8 italic">"Наш путь через океаны и континенты теперь навсегда сохранен в истории."</p>
+            
+            <div class="p-6 border-2 border-amber-800 border-dashed mb-8 bg-amber-50 bg-opacity-50">
+                <p class="text-2xl font-bold fancy-font text-amber-900">Точность дешифровки: <span id="final-score" class="text-green-700">100%</span></p>
+            </div>
+
+            <button onclick="resetGame()" class="px-8 py-3 text-xl font-bold rounded-sm option-btn">
+                Новая экспедиция
+            </button>
+        </div>
+
+    </div>
+
+    <script>
+        // База данных вопросов
+        const questions = [
+            {
+                text: "День 4. Эхолот показывает глубину более 11 000 метров. Вокруг острова вулканического происхождения, часто штормит. За бортом самое большое количество островов. Где мы?",
+                correct: "Тихий океан",
+                options: ["Атлантический океан", "Тихий океан", "Индийский океан", "Евразия"]
+            },
+            {
+                text: "День 12. Температура за бортом упала до экстремальных минусов. Прямо по курсу огромные глыбы льда. На берегу мы видим птиц во фраках, но ни одного белого медведя. Здесь нет ни одной страны.",
+                correct: "Антарктида",
+                options: ["Северный Ледовитый океан", "Евразия", "Антарктида", "Северная Америка"]
+            },
+            {
+                text: "День 25. Жара невыносимая. Мы пересекаем экватор. На берегу простирается самая огромная пустыня в мире, а в саванне бродят жирафы.",
+                correct: "Африка",
+                options: ["Южная Америка", "Африка", "Австралия", "Евразия"]
+            },
+            {
+                text: "День 33. Мы плывем по океану, который по форме напоминает латинскую букву S. Он разделяет Старый и Новый свет.",
+                correct: "Атлантический океан",
+                options: ["Тихий океан", "Индийский океан", "Атлантический океан", "Южный океан"]
+            },
+            {
+                text: "День 40. Мы причалили к самому маленькому и сухому материку. Здесь все вверх дном! Весь континент занимает всего одно государство, а по равнинам скачут сумчатые животные.",
+                correct: "Австралия",
+                options: ["Африка", "Южная Америка", "Австралия", "Антарктида"]
+            }
+        ];
+
+        // Состояние игры
+        let currentQuestionIndex = 0;
+        let errorsCount = 0;
+        let isTyping = false;
+        let typeTimeout;
+
+        // Элементы DOM
+        const screens = {
+            start: document.getElementById('start-screen'),
+            game: document.getElementById('game-screen'),
+            end: document.getElementById('end-screen')
+        };
+        const logTextEl = document.getElementById('log-text');
+        const optionsContainer = document.getElementById('options-container');
+        const progressEl = document.getElementById('current-progress');
+        const feedbackMsg = document.getElementById('feedback-msg');
+        const statusIndicator = document.getElementById('status-indicator');
+        const systemStatus = document.getElementById('system-status');
+
+        // Переключение экранов
+        function showScreen(screenName) {
+            Object.values(screens).forEach(s => s.classList.add('hidden'));
+            screens[screenName].classList.remove('hidden');
+            screens[screenName].classList.add('flex');
+        }
+
+        // Запуск игры
+        function startGame() {
+            currentQuestionIndex = 0;
+            errorsCount = 0;
+            showScreen('game');
+            loadQuestion();
+        }
+
+        // Перемешивание вариантов ответов
+        function shuffleArray(array) {
+            const arr = [...array];
+            for (let i = arr.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [arr[i], arr[j]] = [arr[j], arr[i]];
+            }
+            return arr;
+        }
+
+        // Загрузка вопроса
+        function loadQuestion() {
+            clearTimeout(typeTimeout);
+            
+            // Сброс UI
+            optionsContainer.innerHTML = '';
+            optionsContainer.style.opacity = '0';
+            feedbackMsg.style.opacity = '0';
+            logTextEl.innerHTML = '';
+            logTextEl.classList.add('decoding-text');
+            
+            progressEl.textContent = currentQuestionIndex + 1;
+            systemStatus.textContent = "Система: Дешифровка сектора " + (currentQuestionIndex + 1) + "...";
+            statusIndicator.className = "w-3 h-3 rounded-full bg-amber-500 animate-pulse mr-2";
+
+            const currentQ = questions[currentQuestionIndex];
+            
+            // Эффект печатания (дешифровки)
+            typeWriterEffect(currentQ.text, 0, () => {
+                // Когда текст допечатался
+                logTextEl.classList.remove('decoding-text');
+                systemStatus.textContent = "Система: Ожидание ввода";
+                statusIndicator.className = "w-3 h-3 rounded-full bg-green-500 mr-2";
+                
+                // Показываем кнопки
+                const shuffledOptions = shuffleArray(currentQ.options);
+                shuffledOptions.forEach(option => {
+                    const btn = document.createElement('button');
+                    btn.className = 'option-btn font-bold text-lg py-4 px-6 rounded shadow-sm text-amber-950 uppercase tracking-wide';
+                    btn.textContent = option;
+                    btn.onclick = () => handleAnswer(btn, option, currentQ.correct);
+                    optionsContainer.appendChild(btn);
+                });
+                
+                optionsContainer.style.opacity = '1';
+            });
+        }
+
+        // Функция посимвольного вывода текста
+        function typeWriterEffect(text, index, callback) {
+            isTyping = true;
+            if (index < text.length) {
+                // Добавляем случайный "глюк" дешифровки для атмосферы (редко)
+                let char = text.charAt(index);
+                if (Math.random() < 0.02 && char !== ' ') {
+                    const glitchChars = '!<>-_\\/[]{}—=+*^?#_';
+                    logTextEl.innerHTML += `<span class="opacity-50">${glitchChars.charAt(Math.floor(Math.random() * glitchChars.length))}</span>`;
+                    // Сразу удаляем глюк и ставим правильную букву с задержкой
+                    typeTimeout = setTimeout(() => {
+                        logTextEl.innerHTML = logTextEl.innerHTML.slice(0, -32) + char; // Убираем span и ставим букву
+                        typeWriterEffect(text, index + 1, callback);
+                    }, 40);
+                } else {
+                    logTextEl.innerHTML += char;
+                    // Скорость печати (можно регулировать)
+                    typeTimeout = setTimeout(() => typeWriterEffect(text, index + 1, callback), 25);
+                }
+            } else {
+                isTyping = false;
+                if (callback) callback();
+            }
+        }
+
+        // Обработка клика по ответу
+        function handleAnswer(buttonEl, selected, correct) {
+            if (isTyping) return; // Защита от кликов во время анимации
+
+            // Блокируем все кнопки
+            const allBtns = optionsContainer.querySelectorAll('button');
+            allBtns.forEach(btn => btn.disabled = true);
+
+            if (selected === correct) {
+                // Правильный ответ
+                buttonEl.classList.add('correct-anim');
+                feedbackMsg.textContent = "✓ Координаты подтверждены";
+                feedbackMsg.className = "h-8 mt-4 text-center font-bold text-xl text-green-700 transition-opacity opacity-100";
+                
+                setTimeout(() => {
+                    currentQuestionIndex++;
+                    if (currentQuestionIndex < questions.length) {
+                        loadQuestion();
+                    } else {
+                        endGame();
+                    }
+                }, 1500);
+
+            } else {
+                // Неправильный ответ
+                errorsCount++;
+                buttonEl.classList.add('wrong-anim');
+                feedbackMsg.textContent = "✗ Ошибка позиционирования. Попробуйте еще раз.";
+                feedbackMsg.className = "h-8 mt-4 text-center font-bold text-lg text-red-700 transition-opacity opacity-100";
+                
+                setTimeout(() => {
+                    buttonEl.classList.remove('wrong-anim');
+                    feedbackMsg.style.opacity = '0';
+                    allBtns.forEach(btn => btn.disabled = false);
+                }, 1000);
+            }
+        }
+
+        // Завершение игры
+        function endGame() {
+            showScreen('end');
+            const scoreEl = document.getElementById('final-score');
+            
+            // Вычисление оценки (базово)
+            let percentage = 100 - (errorsCount * 10); 
+            if(percentage < 0) percentage = 0;
+
+            scoreEl.textContent = percentage + "%";
+            
+            if (percentage === 100) {
+                scoreEl.className = "text-green-600";
+            } else if (percentage >= 70) {
+                scoreEl.className = "text-amber-600";
+            } else {
+                scoreEl.className = "text-red-600";
+            }
+        }
+
+        // Сброс и рестарт
+        function resetGame() {
+            startGame();
+        }
+
+    </script>
+</body>
+</html>
